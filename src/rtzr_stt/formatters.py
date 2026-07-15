@@ -1,7 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Any
+
+
+def _utterance_message(utterance: object, index: int) -> str | None:
+    if not isinstance(utterance, dict):
+        raise ValueError(f"results.utterances[{index}]가 객체가 아닙니다.")
+    message = utterance.get("msg")
+    if not isinstance(message, str):
+        raise ValueError(f"results.utterances[{index}].msg가 문자열이 아닙니다.")
+    stripped = message.strip()
+    return stripped or None
 
 
 def nonempty_utterances(response: dict[str, Any]) -> list[dict[str, Any]]:
@@ -9,13 +18,12 @@ def nonempty_utterances(response: dict[str, Any]) -> list[dict[str, Any]]:
     utterances = results.get("utterances") if isinstance(results, dict) else None
     if not isinstance(utterances, list):
         raise ValueError("응답에 results.utterances 배열이 없습니다.")
-    return [
-        utterance
-        for utterance in utterances
-        if isinstance(utterance, dict)
-        and isinstance(utterance.get("msg"), str)
-        and utterance["msg"].strip()
-    ]
+    nonempty: list[dict[str, Any]] = []
+    for index, utterance in enumerate(utterances):
+        message = _utterance_message(utterance, index)
+        if message is not None:
+            nonempty.append(utterance)
+    return nonempty
 
 
 def transcript_text(response: dict[str, Any]) -> str:
@@ -37,8 +45,10 @@ def transcript_srt(response: dict[str, Any]) -> str:
     for index, utterance in enumerate(nonempty_utterances(response), start=1):
         start = utterance.get("start_at")
         duration = utterance.get("duration")
-        if not isinstance(start, int) or not isinstance(duration, int):
-            raise ValueError("SRT 생성에 필요한 start_at 또는 duration이 없습니다.")
+        if type(start) is not int or type(duration) is not int:
+            raise ValueError("SRT 생성에 필요한 start_at과 duration은 정수여야 합니다.")
+        if start < 0 or duration < 0:
+            raise ValueError("SRT 생성에 필요한 start_at과 duration은 0 이상이어야 합니다.")
         end = start + duration
         blocks.append(
             f"{index}\n{_srt_timestamp(start)} --> {_srt_timestamp(end)}\n"
@@ -49,9 +59,3 @@ def transcript_srt(response: dict[str, Any]) -> str:
 
 def hypothesis_text(response: dict[str, Any]) -> str:
     return " ".join(utterance["msg"].strip() for utterance in nonempty_utterances(response))
-
-
-def utterance_messages(utterances: Iterable[dict[str, Any]]) -> str:
-    return " ".join(
-        str(item.get("msg", "")).strip() for item in utterances if str(item.get("msg", "")).strip()
-    )

@@ -54,6 +54,45 @@ def test_txt_and_srt_output_skip_empty_utterances():
     )
 
 
+@pytest.mark.parametrize(
+    "utterance",
+    [
+        None,
+        {},
+        {"msg": 123, "start_at": 0, "duration": 100},
+    ],
+)
+def test_formatter_rejects_malformed_utterances(utterance):
+    response = {"results": {"utterances": [utterance]}}
+
+    with pytest.raises(ValueError, match=r"utterances\[0\]"):
+        transcript_text(response)
+
+
+def test_srt_intentionally_skips_whitespace_only_message_without_timing():
+    response = {"results": {"utterances": [{"msg": "  \n  "}]}}
+
+    assert transcript_srt(response) == ""
+
+
+@pytest.mark.parametrize(
+    ("start", "duration"),
+    [
+        (True, 100),
+        (0, False),
+        (-1, 100),
+        (0, -1),
+    ],
+)
+def test_srt_requires_nonnegative_integer_timing(start, duration):
+    response = {
+        "results": {"utterances": [{"msg": "문장", "start_at": start, "duration": duration}]}
+    }
+
+    with pytest.raises(ValueError, match="start_at"):
+        transcript_srt(response)
+
+
 def test_srt_requires_timing_fields():
     response = {"results": {"utterances": [{"msg": "문장"}]}}
     with pytest.raises(ValueError, match="start_at"):

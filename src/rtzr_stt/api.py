@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -11,6 +13,8 @@ from rtzr_stt.config import BASE_URL, DEFAULT_TRANSCRIBE_CONFIG, canonical_confi
 
 TRANSIENT_GET_STATUSES = {429, 500, 502, 503, 504}
 BACKOFF_SECONDS = (1.0, 2.0, 4.0)
+DEFAULT_POLL_INTERVAL_SECONDS = 5.0
+DEFAULT_WAIT_TIMEOUT_SECONDS = 3600.0
 
 
 class RTZRError(RuntimeError):
@@ -63,6 +67,26 @@ def _json_object(response: requests.Response, operation: str) -> dict[str, Any]:
     return payload
 
 
+def _validate_positive_finite(value: float, name: str) -> None:
+    if isinstance(value, bool) or not math.isfinite(value):
+        raise ValueError(f"{name}은 유한한 수여야 합니다.")
+    if value <= 0:
+        raise ValueError(f"{name}은 0보다 커야 합니다.")
+
+
+def validate_wait_options(poll_interval: float, timeout: float) -> None:
+    """Validate polling controls before a transcription job is submitted."""
+    _validate_positive_finite(poll_interval, "poll_interval")
+    _validate_positive_finite(timeout, "timeout")
+
+
+def _rewind_multipart_files(kwargs: dict[str, Any]) -> None:
+    for file_part in kwargs.get("files", {}).values():
+        file_object = file_part[1] if isinstance(file_part, tuple) else file_part
+        if hasattr(file_object, "seek"):
+            file_object.seek(0)
+
+
 class RTZRClient:
     """Small synchronous client for the official batch transcription API."""
 
@@ -77,6 +101,7 @@ class RTZRClient:
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
+        _validate_positive_finite(request_timeout, "request_timeout")
         self._client_id = client_id
         self._client_secret = client_secret
         self._base_url = base_url.rstrip("/")
@@ -118,6 +143,7 @@ class RTZRClient:
         *,
         operation: str,
         retry_get: bool,
+        retry_submit_limit: bool = False,
         **kwargs: Any,
     ) -> requests.Response:
         if self._access_token is None:
@@ -147,10 +173,7 @@ class RTZRClient:
             if response.status_code == 401 and not reauthenticated:
                 self.authenticate()
                 reauthenticated = True
-                for file_part in kwargs.get("files", {}).values():
-                    file_object = file_part[1] if isinstance(file_part, tuple) else file_part
-                    if hasattr(file_object, "seek"):
-                        file_object.seek(0)
+                _rewind_multipart_files(kwargs)
                 continue
 
             if (
@@ -160,6 +183,17 @@ class RTZRClient:
             ):
                 self._sleep(BACKOFF_SECONDS[retry_count])
                 retry_count += 1
+                continue
+
+            if (
+                retry_submit_limit
+                and response.status_code == 429
+                and _response_code(response) == "A0002"
+                and retry_count < len(BACKOFF_SECONDS)
+            ):
+                self._sleep(BACKOFF_SECONDS[retry_count])
+                retry_count += 1
+                _rewind_multipart_files(kwargs)
                 continue
 
             if not 200 <= response.status_code < 300:
@@ -174,7 +208,8 @@ class RTZRClient:
         path = Path(audio_path)
         if not path.is_file():
             raise FileNotFoundError(f"오디오 파일을 찾을 수 없습니다: {path}")
-        request_config = config or DEFAULT_TRANSCRIBE_CONFIG
+        request_config = DEFAULT_TRANSCRIBE_CONFIG if config is None else config
+        upload_name = f"audio{path.suffix.lower()}" if path.suffix else "audio"
         try:
             with path.open("rb") as audio:
                 response = self._authorized_request(
@@ -182,9 +217,10 @@ class RTZRClient:
                     f"{self._base_url}/v1/transcribe",
                     operation="전사 생성",
                     retry_get=False,
+                    retry_submit_limit=True,
                     headers={"accept": "application/json"},
                     data={"config": canonical_config_json(request_config)},
-                    files={"file": (path.name, audio)},
+                    files={"file": (upload_name, audio)},
                 )
         except OSError as exc:
             raise RTZRError(f"오디오 파일을 읽을 수 없습니다: {path}") from exc
@@ -195,9 +231,12 @@ class RTZRClient:
         return transcribe_id
 
     def get(self, transcribe_id: str) -> dict[str, Any]:
+        if not isinstance(transcribe_id, str) or not transcribe_id:
+            raise ValueError("transcribe_id가 비었습니다.")
+        encoded_id = quote(transcribe_id, safe="")
         response = self._authorized_request(
             "GET",
-            f"{self._base_url}/v1/transcribe/{transcribe_id}",
+            f"{self._base_url}/v1/transcribe/{encoded_id}",
             operation="전사 조회",
             retry_get=True,
             headers={"accept": "application/json"},
@@ -208,13 +247,10 @@ class RTZRClient:
         self,
         transcribe_id: str,
         *,
-        poll_interval: float = 5.0,
-        timeout: float = 1800.0,
+        poll_interval: float = DEFAULT_POLL_INTERVAL_SECONDS,
+        timeout: float = DEFAULT_WAIT_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
-        if poll_interval <= 0:
-            raise ValueError("poll_interval은 0보다 커야 합니다.")
-        if timeout <= 0:
-            raise ValueError("timeout은 0보다 커야 합니다.")
+        validate_wait_options(poll_interval, timeout)
 
         started = self._monotonic()
         while True:
@@ -244,9 +280,10 @@ class RTZRClient:
         audio_path: str | Path,
         *,
         config: dict[str, Any] | None = None,
-        poll_interval: float = 5.0,
-        timeout: float = 1800.0,
+        poll_interval: float = DEFAULT_POLL_INTERVAL_SECONDS,
+        timeout: float = DEFAULT_WAIT_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
+        validate_wait_options(poll_interval, timeout)
         transcribe_id = self.submit(audio_path, config)
         return self.wait_for_completion(
             transcribe_id,
