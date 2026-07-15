@@ -3,23 +3,24 @@ UV ?= uv
 .PHONY: sync check test lint format smoke-test
 
 sync:
-	$(UV) sync --frozen
+	$(UV) sync --locked
 
 check:
-	$(UV) run ruff check .
-	$(UV) run ruff format --check .
-	$(UV) run pytest
+	$(UV) lock --check
+	$(UV) run --locked ruff check .
+	$(UV) run --locked ruff format --check .
+	$(UV) run --locked pytest
 
 test:
-	$(UV) run pytest
+	$(UV) run --locked pytest
 
 lint:
-	$(UV) run ruff check .
+	$(UV) run --locked ruff check .
 
 format:
-	$(UV) run ruff format .
+	$(UV) run --locked ruff format .
 
 smoke-test:
 	@test -n "$(SMOKE_AUDIO)" || (echo "SMOKE_AUDIO 경로를 지정하세요." >&2; exit 2)
-	$(UV) run rtzr-stt --env-file ../.env transcribe "$(SMOKE_AUDIO)" \
+	$(UV) run --locked rtzr-stt transcribe "$(SMOKE_AUDIO)" \
 		--format all --output-dir build/smoke
