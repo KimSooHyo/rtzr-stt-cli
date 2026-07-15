@@ -1,0 +1,2 @@
+sample_id,audio_path,reference_path,session_id,stratum
+sample-001,audio/sample.wav,references/sample.txt,session-demo,clean
