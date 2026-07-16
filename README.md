@@ -20,7 +20,7 @@ STT_CLIENT_ID=your-client-id
 STT_CLIENT_SECRET=your-client-secret
 ~~~
 
-메일 등으로 받은 `sample.wav`는 `README.md`와 같은 위치에 둡니다.
+`sample.wav`를 `README.md`와 같은 위치에 둡니다.
 
 ~~~text
 rtzr-stt-cli/
@@ -65,7 +65,7 @@ uv run --locked rtzr-stt transcribe sample.wav \
   --reference sample.txt
 ~~~
 
-`sample.wav`만 받았다면 `--reference`를 생략하면 됩니다.
+정답 파일이 없다면 `--reference`를 생략하면 됩니다.
 
 ## 여러 WAV 평가
 
@@ -77,6 +77,7 @@ data/
 ├── references/meeting-01.txt
 └── manifest.csv
 ~~~
+
 `data/manifest.example.csv`를 복사해 각 행을 작성합니다. 오디오와 정답 경로는 manifest 파일 위치를 기준으로 해석합니다.
 
 ~~~csv
@@ -128,11 +129,18 @@ make smoke-test SMOKE_AUDIO=sample.wav
 
 ## 데이터와 보안
 
-사용 권한이 있고 개인정보 포함 여부를 확인한 음원만 사용하세요. 음원, 정답, 실제 manifest와 결과 파일은 공개 저장소에 올리지 않습니다.
+음원, 정답, 실제 manifest와 결과 파일은 공개 저장소에 올리지 않습니다.
 
 `response.json`, transcript, `metrics.json`, `summary.json`에는 발화 내용이나 파일 식별 정보가 들어갈 수 있습니다. 이 도구는 결과를 암호화하거나 익명화하지 않으므로 로컬 접근 권한과 보관 기간을 직접 관리해야 합니다.
 
-보고된 평가는 AIHub의 한국어 회의 음성 로컬 사본 중 70개, 총 683.125초를 사용했습니다. 데이터 원본은 공개하지 않으며, 표본·정규화·6.53% 결과와 한계는 [평가 문서](docs/evaluation.md)에 기록했습니다.
+AIHub 자료를 사용하려면 해당 데이터의 이용정책과 외부 API 처리 허용 범위를 먼저 확인해야 합니다. 이 프로젝트에서는 AIHub 원음을 외부 API에 다시 업로드할 수 있다는 별도 허가를 확인하지 못했으므로, 비공개 평가 수치를 현재 코드의 성과로 제시하지 않습니다.
+
+## 참고 자료와 사용한 오픈소스
+
+- API 계약: RTZR [인증](https://developers.rtzr.ai/docs/authentications/), [일반 STT](https://developers.rtzr.ai/docs/stt-file/), [처리량 제한](https://developers.rtzr.ai/docs/en/rate_limit/), [결과 보관 안내](https://developers.rtzr.ai/docs/)
+- 실행 의존성: [Requests](https://requests.readthedocs.io/en/latest/), [python-dotenv](https://pypi.org/project/python-dotenv/), [JiWER](https://jitsi.github.io/jiwer/)
+- 개발 도구: [uv](https://docs.astral.sh/uv/), [pytest](https://docs.pytest.org/en/stable/), [responses](https://github.com/getsentry/responses), [Ruff](https://docs.astral.sh/ruff/), [Hatchling](https://hatch.pypa.io/latest/config/build/)
+- 데이터 관련 자료: 과학기술정보통신부·한국지능정보사회진흥원의 AI Hub 사업결과물인 [주요 영역별 회의 음성인식 데이터](https://aihub.or.kr/aihubdata/data/view.do?dataSetSn=464), [이용정책](https://aihub.or.kr/intrcn/guid/usagepolicy.do?currMenu=151&topMenu=105), [한국어 음성 전사 규칙 v1.0](https://aihub.or.kr/aihubnews/notice/view.do?currMenu=132&nttSn=9746&pageIndex=1&topMenu=103)
 
 ## 더 읽기
 

@@ -1,44 +1,61 @@
-# 철자형 CER 평가
+# 철자형 CER 평가 방법
 
 ## 목적
 
-한국어 회의 전사 상황을 작은 고정 표본으로 모사해, 같은 API 설정에서 문자 전사 오류를 확인한다. 제품 전체 품질이나 화자 분리 성능을 주장하는 benchmark는 아니다.
+이 평가는 RTZR Batch STT API 연동과 지표 계산 과정이 같은 입력에서 반복 가능한지 확인하기 위한 가벼운 검증이다. 특정 데이터셋이나 제품 전체의 정확도, 화자 분리 성능을 주장하는 benchmark가 아니다.
 
-## 표본
+## 데이터 준비와 권한
 
-- 로컬 KconfSpeech 회의 음성 7개 세션
-- 세션당 10개, 총 70개
-- 숫자 포함 이중 전사 14개
-- 숫자 없는 이중 전사 14개
-- 비이중 잡음 표기 14개
-- 일반 발화 28개
-- 층 내부는 `SHA-256("20260715:" + 데이터 루트 기준 상대경로)` 오름차순
-- 최대 허용 길이 900초, 실제 길이 683.125초
+평가에는 다음 조건을 모두 만족하는 WAV와 UTF-8 정답만 사용한다.
 
-실제 manifest, 음원, 정답, 원시 응답과 파일별 가설은 공개하지 않는다. `data/manifest.example.csv`는 형식만 보여 주며, 재실행하려면 이용 권한이 있는 WAV·정답이 필요하다.
+- 음원과 정답을 평가에 사용할 권한이 있다.
+- 외부 STT API에 음원을 전송해 처리할 수 있다.
+- 개인정보 포함 여부를 확인했고 필요한 보호 조치를 했다.
 
-AIHub 공식 페이지의 현재 [주요 영역별 회의 음성인식 데이터](https://aihub.or.kr/aihubdata/data/view.do?dataSetSn=464)는 버전 1.5다. 평가에 사용한 로컬 session 메타데이터는 version 1.0이므로 최신 공개본과 동일하다고 단정하지 않는다.
+해당 자료는 과학기술정보통신부·한국지능정보사회진흥원의 AI Hub 사업결과물이다. [데이터셋 페이지](https://aihub.or.kr/aihubdata/data/view.do?dataSetSn=464)와 [이용정책](https://aihub.or.kr/intrcn/guid/usagepolicy.do?currMenu=151&topMenu=105)을 함께 확인해야 한다. 이 프로젝트에서는 AIHub 원음을 외부 API에 다시 업로드할 수 있다는 별도 허가를 확인하지 못했다. 따라서 과거 비공개 실행 수치를 현재 코드의 재현 결과로 제시하지 않는다.
 
-## 입력 검증과 provenance
+## Manifest와 표본 고정
 
-`evaluate`는 API 호출 전에 다음을 모두 확인한다.
+`evaluate`는 표본을 고르지 않는다. 사용자가 선택한 표본을 CSV manifest로 고정하고 위에서 아래 순서대로 처리한다.
 
-- manifest 필수 열과 중복·안전하지 않은 `sample_id`
+~~~csv
+sample_id,audio_path,reference_path,session_id,stratum
+sample-001,audio/sample.wav,references/sample.txt,session-demo,clean
+~~~
+
+- 오디오와 정답 경로는 manifest 파일 위치를 기준으로 해석한다.
+- `sample_id`는 영문, 숫자, `.`, `_`, `-`만 사용하고 중복하지 않는다.
+- `session_id`는 같은 녹음 단위, `stratum`은 비교할 조건을 나타낸다.
+- 표본을 추출한다면 결과를 보기 전에 규칙과 난수를 고정하고, 세션이 한쪽 조건에 치우치지 않는지 기록한다.
+
+실제 음원, 정답, manifest, 원시 응답과 파일별 가설은 공개 저장소에 넣지 않는다. `data/manifest.example.csv`는 형식만 제공한다.
+
+## API 호출 전 검증과 입력 기록
+
+`evaluate`는 credential을 읽고 API client를 만들기 전에 manifest 전체를 검사한다.
+
+- 필수 열, 중복되거나 안전하지 않은 `sample_id`
 - 오디오·정답 파일 존재 여부와 UTF-8 정답
 - 정규화 후 비어 있지 않은 정답
-- WAV 헤더·실제 프레임 데이터 일치, 0초 초과 길이, 전체 15분 제한
+- WAV 헤더와 실제 프레임 데이터 일치, 0초보다 긴 오디오
+- 전체 오디오 길이가 `--max-audio-minutes` 이내인지 여부
 
-manifest의 상대경로는 manifest 파일 위치를 기준으로 해석한다. 단건 전사는 공식 API의 여러 오디오 형식을 받을 수 있지만, 평가는 로컬에서 재생 시간을 계산해야 하므로 WAV만 지원한다.
+기본 길이 제한은 15분이다. `summary.json`에는 manifest와 고정 API 설정의 SHA-256, 각 오디오·정답의 SHA-256을 기록한다. 이 값은 입력과 설정이 같은지 확인하기 위한 것이며, 원본을 대신하거나 서버 모델 버전을 고정하지는 않는다.
 
-`summary.json`에는 manifest·고정 config SHA-256과 각 오디오·정답 SHA-256을 기록한다. 이 hash는 어떤 입력과 설정으로 지표를 만들었는지 설명하기 위한 provenance이며, 서버 모델 revision을 고정하지는 않는다.
+## 고정 API 설정
 
-## API 설정
+`src/rtzr_stt/config.py`의 다음 설정을 모든 표본에 동일하게 적용한다.
 
-`src/rtzr_stt/config.py`의 고정 `sommers`·`ko`·`GENERAL` 설정을 사용한다. 숫자 표기를 정답과 맞추기 위해 ITN을 켜고, 원문 충실도를 위해 간투어 필터는 끈다. 화자 분리, 문단 분리, 단어 timestamp는 이번 지표 범위에서 제외한다.
+- `sommers`, 한국어, `GENERAL`
+- 숫자 표기를 정답과 맞추기 위해 ITN 사용
+- 원문 철자형 비교를 위해 간투어 필터 미사용
+- 화자 분리, 문단 분리, 비속어 필터, 단어 timestamp 미사용
+
+설정을 바꾸면 이전 결과와 직접 비교하지 않고 별도 실행으로 취급한다.
 
 ## 정규화
 
-reference와 hypothesis에 같은 규칙을 순서대로 적용한다.
+reference와 hypothesis에 같은 규칙을 순서대로 적용한다. 규칙은 `metrics.py` 한 곳에 구현하고 unit test로 고정한다.
 
 1. Unicode NFC
 2. 이중 전사에서 왼쪽 철자형 선택
@@ -49,57 +66,35 @@ reference와 hypothesis에 같은 규칙을 순서대로 적용한다.
 7. 모든 공백 제거
 8. 정답이 비면 평가 중단
 
-숫자는 보존한다. 규칙은 `metrics.py`에 한 번만 구현하고 unit test로 고정한다.
+숫자는 보존한다. 한국어 음성 라벨을 사용할 때는 AIHub의 [한국어 음성 전사 규칙 v1.0](https://aihub.or.kr/aihubnews/notice/view.do?currMenu=132&nttSn=9746&pageIndex=1&topMenu=103)과 해당 데이터셋의 실제 라벨 형식을 함께 확인한다.
 
-## 집계
+## CER 집계와 해석
 
-대표값은 `jiwer.process_characters`가 계산한 전체 substitution·deletion·insertion 합을 전체 reference 문자 수로 나눈 corpus micro CER이다. 파일별 CER은 오류 사례 탐색에만 사용하며 단순 평균하지 않는다.
+JiWER `process_characters`로 substitution, deletion, insertion을 구한다.
 
-층별 CER도 같은 방식으로 해당 층의 오류와 정답 문자를 먼저 합산한다. 층별 차이는 원인 분석이 아니라 후속 사례를 고르는 진단 신호로만 사용한다.
+~~~text
+CER = (substitutions + deletions + insertions) / reference characters
+~~~
 
-## 실행과 결과
+대표값은 파일별 CER의 평균이 아니라 모든 표본의 오류 수와 정답 문자 수를 먼저 합산한 corpus micro CER이다. 층별 CER도 같은 방식으로 계산한다. 파일별 CER과 층별 차이는 오류 사례를 찾는 신호로만 사용하고, 표본 수와 조건을 통제하지 않은 채 원인이나 전체 성능으로 일반화하지 않는다.
 
-실제 API 확인은 5개 smoke, 10개 pilot, 70개 final 순서로 진행했다. 현재 CLI의 평가는 manifest의 모든 표본을 순차 전사하며, 중단 작업 이어받기나 완료 결과 자동 재사용은 지원하지 않는다.
+## 실행과 결과 확인
 
-2026-07-15 final 결과는 다음과 같다.
+~~~bash
+uv run --locked rtzr-stt evaluate data/manifest.csv \
+  --output-dir results/evaluation \
+  --max-audio-minutes 15
+~~~
 
-| 항목 | 값 |
-|---|---:|
-| 표본 | 70개 |
-| 세션 | 7개, 세션당 10개 |
-| 총 오디오 | 683.125초 |
-| 정답 문자 | 3,966 |
-| substitution | 97 |
-| deletion | 86 |
-| insertion | 76 |
-| corpus CER | 6.53% |
+각 표본 디렉터리에는 `response.json`, `transcript.txt`, `transcript.srt`, `metrics.json`이 생긴다. 루트 `summary.json`에는 표본 수, 총 길이, 입력·설정 hash, corpus CER, 층별·파일별 지표가 저장된다.
 
-층별 micro CER:
+재현 결과를 보고할 때는 코드 commit, 실행일, 표본 선택 규칙, 표본 수·총 길이, manifest·설정 hash, 오류 수와 corpus CER을 함께 기록한다. 서버 모델이 갱신되면 입력과 설정이 같아도 결과가 달라질 수 있다.
 
-| 층 | 표본 | 정답 문자 | 오류 합 | Micro CER |
-|---|---:|---:|---:|---:|
-| 일반 발화 | 28 | 1,442 | 71 | 4.92% |
-| 숫자 포함 이중 전사 | 14 | 811 | 63 | 7.77% |
-| 숫자 없는 이중 전사 | 14 | 933 | 86 | 9.22% |
-| 비이중 잡음 표기 | 14 | 780 | 39 | 5.00% |
+## 한계
 
-이 표본에서는 두 이중 전사 층의 CER이 일반·잡음 층보다 높았다. 발화 내용과 음향 조건도 함께 다르므로 이중 전사 표기 자체가 차이의 원인이라고 해석하지 않는다.
-
-결과 provenance:
-
-- manifest SHA-256: `6150fea2252c0b983dba3412969e84c06f7c30f21fa916ae17f9c76bf5568da5`
-- 고정 config SHA-256: `a74691f4d02c973986c022804e03b69c0345ab3ed130b4e13e9b35c3dabd355d`
-- API 실행일: 2026-07-15 KST
-
-## 공개 재현 범위와 한계
-
-공개 저장소에서는 manifest 검증, 고정 설정, 정규화, corpus·층별 CER 집계와 mock API 계약 테스트를 재현할 수 있다. 원본 평가 데이터가 없으므로 위 70개 수치를 저장소만으로 완전히 재산출할 수는 없다.
-
-- 15분 이하의 작은 층화 표본이라 전체 데이터 대표성이나 신뢰구간을 주장하지 않는다.
-- 짧은 발화 단위라 장시간 회의 문맥과 SRT 분할 품질을 충분히 검증하지 않는다.
-- CER은 의미 보존, 가독성, 요약 품질을 직접 측정하지 않는다.
-- 화자 분리를 사용하지 않아 Callabo의 모든 회의록 기능을 재현하지 않는다.
-- 서버 모델이 갱신되면 동일한 입력·설정도 이후 결과가 달라질 수 있다.
-- `summary.json`은 입력 hash를 기록하지만 API 실행 시각과 서버 model revision을 자동 기록하지 않는다.
-- 입력 snapshot을 만들지 않으므로 검증 뒤 업로드 직전에 파일이 바뀌는 경우까지 방어하지 않는다.
+- CER은 의미 보존, 가독성, 자막 분할 품질을 직접 측정하지 않는다.
+- 짧은 표본은 장시간 회의 문맥이나 전체 데이터 분포를 대표하지 않는다.
+- 화자 분리를 사용하지 않으므로 회의록 제품의 모든 기능을 평가하지 않는다.
+- 중단 작업 재개, 결과 cache, 같은 출력 디렉터리의 동시 실행은 지원하지 않는다.
+- 입력 snapshot을 만들지 않아 검증 뒤 업로드 전에 파일이 바뀌는 경우까지 방어하지 않는다.
 - 출력에는 발화와 정규화된 정답이 포함될 수 있으며 자동 암호화·익명화를 제공하지 않는다.
