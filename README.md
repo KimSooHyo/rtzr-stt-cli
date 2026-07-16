@@ -27,7 +27,7 @@ uv run --locked rtzr-stt evaluate \
   --output-dir outputs/fleurs-smoke
 ~~~
 
-첫 실행에는 데이터 다운로드가 필요합니다. 이후에는 고정한 Hugging Face revision의 로컬 캐시를 재사용합니다.
+첫 실행에는 약 120 MiB의 한국어 validation 오디오 압축파일 다운로드가 필요합니다. 이후에는 고정한 Hugging Face revision의 로컬 캐시를 재사용합니다.
 
 ~~~text
 outputs/fleurs-smoke/

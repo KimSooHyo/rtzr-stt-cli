@@ -87,7 +87,7 @@ uv run --locked rtzr-stt evaluate \
 
 출력 경로는 존재하지 않거나 비어 있어야 한다. 다른 실행의 파일이 섞이지 않도록 재실행에는 새 디렉터리를 사용한다.
 
-실제 음원, 자동 manifest, 원시 응답, 정답·가설과 파일별 결과는 공개 저장소에 넣지 않는다. 공개 보고에는 code commit, 실행일, 표본 수·총 길이, dataset revision, manifest/config hash와 aggregate 오류 수·CER만 기록한다.
+실제 음원, 자동 manifest, 원시 응답, 정답·가설과 파일별 결과는 공개 저장소에 넣지 않는다. 공개 보고에는 실행일, 표본 수·총 길이, dataset revision, manifest/config hash와 aggregate 오류 수·CER만 기록한다.
 
 ## 실제 실행 확인
 

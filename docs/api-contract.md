@@ -56,4 +56,4 @@ TXT는 각 utterance의 `msg`를 사용한다. SRT는 정수형 millisecond `sta
 
 자동 테스트는 mock HTTP 응답을 사용하며 실제 API를 호출하지 않는다. 서버 정책 변경 가능성은 짧은 live smoke test로 별도 확인한다.
 
-RTZR 공식 안내에 따르면 Batch STT 결과는 서버에서 3일간 보관된 뒤 삭제된다. 이 CLI는 완료 응답을 로컬 `response.json`에 저장하지만, 서버 보관 정책은 로컬 산출물에 적용되지 않는다. 로컬 파일의 접근 권한, 보관 기간과 삭제는 사용자가 관리한다.
+[RTZR 공식 안내](https://developers.rtzr.ai/docs/)에 따르면 Batch STT 결과는 서버에서 3일간 보관된 뒤 삭제된다. 이 CLI는 완료 응답을 로컬 `response.json`에 저장하지만, 서버 보관 정책은 로컬 산출물에 적용되지 않는다. 로컬 파일의 접근 권한, 보관 기간과 삭제는 사용자가 관리한다.
