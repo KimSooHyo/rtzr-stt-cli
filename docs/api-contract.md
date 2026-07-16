@@ -1,6 +1,6 @@
 # API 계약
 
-기준일: 2026-07-15
+기준일: 2026-07-16
 
 구현 기준은 RTZR의 [인증 가이드](https://developers.rtzr.ai/docs/authentications/), [일반 STT](https://developers.rtzr.ai/docs/stt-file/), [처리량 제한](https://developers.rtzr.ai/docs/en/rate_limit/)이다.
 
@@ -39,7 +39,7 @@ TXT는 각 utterance의 `msg`를 사용한다. SRT는 정수형 millisecond `sta
 - 인증된 요청이 401이면 token을 새로 발급해 한 번만 다시 요청한다.
 - 조회 GET의 네트워크 오류, 429, 500·502·503·504는 1·2·4초 간격으로 최대 세 번 재시도한다.
 - 생성 POST는 서버가 작업을 받았는지 불명확한 네트워크 오류나 5xx에서 재전송하지 않는다.
-- 생성 POST의 429 중 작업이 수락되지 않았음을 뜻하는 A0002만 파일을 되감고 1·2·4초 간격으로 최대 세 번 재시도한다. 사용량 초과 A0001은 재시도하지 않는다.
+- 생성 POST의 429 중 동시 처리 제한을 뜻하는 A0002만 파일을 되감고 1·2·4초 간격으로 최대 세 번 재시도한다. 사용량 초과 A0001은 재시도하지 않는다.
 
 이 비대칭 정책은 일시적인 조회 실패에는 대응하되, 모호한 POST를 반복해 중복 작업을 만드는 위험을 줄이기 위한 선택이다.
 
@@ -55,3 +55,5 @@ TXT는 각 utterance의 `msg`를 사용한다. SRT는 정수형 millisecond `sta
 | utterance TXT·SRT 변환 | `formatters.py` | golden·malformed response test |
 
 자동 테스트는 mock HTTP 응답을 사용하며 실제 API를 호출하지 않는다. 서버 정책 변경 가능성은 짧은 live smoke test로 별도 확인한다.
+
+RTZR 공식 안내에 따르면 Batch STT 결과는 서버에서 3일간 보관된 뒤 삭제된다. 이 CLI는 완료 응답을 로컬 `response.json`에 저장하지만, 서버 보관 정책은 로컬 산출물에 적용되지 않는다. 로컬 파일의 접근 권한, 보관 기간과 삭제는 사용자가 관리한다.
