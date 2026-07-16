@@ -5,11 +5,33 @@ import os
 
 import pytest
 
-from rtzr_stt.io import write_json_atomic, write_text_atomic
+from rtzr_stt.io import (
+    validate_empty_output_directory,
+    write_json_atomic,
+    write_text_atomic,
+)
 
 
 def temporary_files_for(destination):
     return list(destination.parent.glob(f".{destination.name}.*.tmp"))
+
+
+def test_output_directory_must_be_missing_or_empty(tmp_path):
+    missing = tmp_path / "missing"
+    empty = tmp_path / "empty"
+    file_path = tmp_path / "result.txt"
+    nonempty = tmp_path / "nonempty"
+    empty.mkdir()
+    file_path.write_text("existing", encoding="utf-8")
+    nonempty.mkdir()
+    (nonempty / "old.txt").write_text("old", encoding="utf-8")
+
+    validate_empty_output_directory(missing)
+    validate_empty_output_directory(empty)
+    with pytest.raises(ValueError, match="디렉터리가 아닙니다"):
+        validate_empty_output_directory(file_path)
+    with pytest.raises(ValueError, match="비어 있지 않습니다"):
+        validate_empty_output_directory(nonempty)
 
 
 def test_write_text_atomic_replaces_with_utf8_and_leaves_no_temporary_file(tmp_path):

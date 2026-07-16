@@ -4,26 +4,38 @@ import pytest
 
 from rtzr_stt.formatters import transcript_srt, transcript_text
 from rtzr_stt.metrics import (
-    EmptyNormalizedText,
+    EmptyReferenceText,
     character_error_metrics,
     corpus_character_error_metrics,
-    normalize_for_spelling_cer,
 )
 
 
-def test_spelling_normalization_uses_left_side_and_preserves_digits():
-    text = "n/ 네, (9월)/(구 월)의 (1)/(한) 사람! b/ (OK)/(오케이)."
-    assert normalize_for_spelling_cer(text) == "네9월의1사람ok"
+@pytest.mark.parametrize(
+    ("reference", "hypothesis", "error_type", "reference_characters", "cer"),
+    [
+        ("가 나", "가나", "deletions", 3, 1 / 3),
+        ("가!", "가", "deletions", 2, 1 / 2),
+        ("A", "a", "substitutions", 1, 1.0),
+        (" 가", "가", "deletions", 2, 1 / 2),
+        ("가", " 가", "insertions", 1, 1.0),
+        ("가", "가", "deletions", 2, 1.0),
+    ],
+)
+def test_exact_cer_counts_all_characters(
+    reference, hypothesis, error_type, reference_characters, cer
+):
+    metrics = character_error_metrics(reference, hypothesis)
 
-
-def test_normalization_removes_annotation_marks_but_keeps_lexical_content():
-    text = "에/ (어떻게)/(어뜨케). 자/ *교육+ (상담)"
-    assert normalize_for_spelling_cer(text) == "에어떻게자교육상담"
+    assert metrics[error_type] == 1
+    assert metrics["reference_characters"] == reference_characters
+    assert metrics["cer"] == pytest.approx(cer)
+    assert metrics["reference"] == reference
+    assert metrics["hypothesis"] == hypothesis
 
 
 def test_empty_reference_is_rejected():
-    with pytest.raises(EmptyNormalizedText):
-        character_error_metrics("n/ !!!", "가설")
+    with pytest.raises(EmptyReferenceText):
+        character_error_metrics("", "가설")
 
 
 def test_single_and_corpus_micro_cer():
@@ -36,6 +48,13 @@ def test_single_and_corpus_micro_cer():
     assert corpus["deletions"] == 1
     assert corpus["reference_characters"] == 5
     assert corpus["cer"] == pytest.approx(2 / 5)
+
+
+def test_corpus_requires_matching_nonempty_input():
+    with pytest.raises(ValueError, match="개수가 다릅니다"):
+        corpus_character_error_metrics(["정답"], [])
+    with pytest.raises(ValueError, match="표본이 없습니다"):
+        corpus_character_error_metrics([], [])
 
 
 def test_txt_and_srt_output_skip_empty_utterances():

@@ -9,9 +9,11 @@ description = "Reproducible CLI for RTZR batch speech transcription and CER eval
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "huggingface-hub>=1.23,<2",
     "jiwer>=4.0,<5",
     "python-dotenv>=1.0,<2",
     "requests>=2.32,<3",
+    "soundfile>=0.14,<1",
 ]
 
 [project.scripts]

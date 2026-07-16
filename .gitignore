@@ -13,16 +13,11 @@ build/
 dist/
 outputs/
 results/
-data/audio/
-data/references/
-/manifest*.csv
-/data/manifest*.csv
-!/data/manifest.example.csv
-/data/manifests/
 response.json
 transcript.txt
 transcript.srt
 metrics.json
+manifest.json
 summary.json
 .*.tmp
 

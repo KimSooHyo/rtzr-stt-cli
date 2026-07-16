@@ -1,4 +1,5 @@
 UV ?= uv
+SMOKE_OUTPUT ?= build/fleurs-smoke
 
 .PHONY: sync check test lint format smoke-test
 
@@ -21,6 +22,5 @@ format:
 	$(UV) run --locked ruff format .
 
 smoke-test:
-	@test -n "$(SMOKE_AUDIO)" || (echo "SMOKE_AUDIO 경로를 지정하세요." >&2; exit 2)
-	$(UV) run --locked rtzr-stt transcribe "$(SMOKE_AUDIO)" \
-		--format all --output-dir build/smoke
+	$(UV) run --locked rtzr-stt evaluate \
+		--output-dir "$(SMOKE_OUTPUT)"

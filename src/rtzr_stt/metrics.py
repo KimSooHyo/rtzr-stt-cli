@@ -1,50 +1,32 @@
 from __future__ import annotations
 
-import re
-import unicodedata
 from collections.abc import Sequence
 from typing import Any
 
-from jiwer import process_characters
+from jiwer import Compose, ReduceToListOfListOfChars, process_characters
 
-DUAL_TRANSCRIPTION = re.compile(r"\(([^()]*)\)/\(([^()]*)\)")
-NOISE_TAG = re.compile(r"(?<![A-Za-z])[blon]/", flags=re.IGNORECASE)
-ANNOTATION_MARKS = str.maketrans("", "", "/*+()")
+EXACT_CHARACTER_TRANSFORM = Compose([ReduceToListOfListOfChars()])
 
 
-class EmptyNormalizedText(ValueError):
+class EmptyReferenceText(ValueError):
     pass
 
 
-def normalize_for_spelling_cer(text: str) -> str:
-    """Normalize both references and hypotheses for spelling-form Korean CER."""
-    normalized = unicodedata.normalize("NFC", text)
-    previous = None
-    while previous != normalized:
-        previous = normalized
-        normalized = DUAL_TRANSCRIPTION.sub(lambda match: match.group(1), normalized)
-    normalized = NOISE_TAG.sub("", normalized)
-    normalized = normalized.translate(ANNOTATION_MARKS)
-    normalized = "".join(
-        character
-        for character in normalized
-        if unicodedata.category(character)[0] not in {"P", "S"}
-    )
-    normalized = normalized.lower()
-    return "".join(normalized.split())
-
-
-def _validated_normalized(text: str, role: str) -> str:
-    normalized = normalize_for_spelling_cer(text)
-    if not normalized:
-        raise EmptyNormalizedText(f"정규화 후 {role} 문자열이 비었습니다.")
-    return normalized
+def _validated_reference(text: str) -> str:
+    if not text:
+        raise EmptyReferenceText("정답 문자열이 비었습니다.")
+    return text
 
 
 def character_error_metrics(reference: str, hypothesis: str) -> dict[str, Any]:
-    ref = _validated_normalized(reference, "정답")
-    hyp = normalize_for_spelling_cer(hypothesis)
-    output = process_characters(ref, hyp)
+    """Calculate exact CER without linguistic or formatting normalization."""
+    ref = _validated_reference(reference)
+    output = process_characters(
+        ref,
+        hypothesis,
+        reference_transform=EXACT_CHARACTER_TRANSFORM,
+        hypothesis_transform=EXACT_CHARACTER_TRANSFORM,
+    )
     reference_characters = output.hits + output.substitutions + output.deletions
     return {
         "cer": output.cer,
@@ -53,8 +35,8 @@ def character_error_metrics(reference: str, hypothesis: str) -> dict[str, Any]:
         "deletions": output.deletions,
         "insertions": output.insertions,
         "reference_characters": reference_characters,
-        "normalized_reference": ref,
-        "normalized_hypothesis": hyp,
+        "reference": ref,
+        "hypothesis": hypothesis,
     }
 
 
@@ -65,9 +47,13 @@ def corpus_character_error_metrics(
         raise ValueError("정답과 가설의 개수가 다릅니다.")
     if not references:
         raise ValueError("CER을 계산할 표본이 없습니다.")
-    normalized_references = [_validated_normalized(reference, "정답") for reference in references]
-    normalized_hypotheses = [normalize_for_spelling_cer(hypothesis) for hypothesis in hypotheses]
-    output = process_characters(normalized_references, normalized_hypotheses)
+    validated_references = [_validated_reference(reference) for reference in references]
+    output = process_characters(
+        validated_references,
+        list(hypotheses),
+        reference_transform=EXACT_CHARACTER_TRANSFORM,
+        hypothesis_transform=EXACT_CHARACTER_TRANSFORM,
+    )
     reference_characters = output.hits + output.substitutions + output.deletions
     return {
         "cer": output.cer,

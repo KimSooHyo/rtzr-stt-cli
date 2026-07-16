@@ -17,6 +17,17 @@ def file_sha256(path: str | Path) -> str:
     return digest.hexdigest()
 
 
+def validate_empty_output_directory(path: str | Path) -> None:
+    """Reject output paths that could mix new artifacts with an earlier run."""
+    destination = Path(path)
+    if not destination.exists():
+        return
+    if not destination.is_dir():
+        raise ValueError(f"결과 경로가 디렉터리가 아닙니다: {destination}")
+    if any(destination.iterdir()):
+        raise ValueError(f"결과 디렉터리가 비어 있지 않습니다. 새 경로를 사용하세요: {destination}")
+
+
 def write_text_atomic(path: str | Path, content: str) -> None:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
